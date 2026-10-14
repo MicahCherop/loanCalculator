@@ -93,6 +93,12 @@ st.markdown(
         padding: 1rem 1.25rem 3rem !important;
     }
 
+    /* Hide Streamlit Cloud badge, profile avatar and "Manage app" button */
+    [class*="viewerBadge"], [class*="_profileContainer_"], [class*="_terminalButton_"],
+    [class*="_container_gzau3"], [data-testid="manage-app-button"],
+    [data-testid="stAppDeployButton"], .stAppDeployButton,
+    [data-testid="stStatusWidget"], [data-testid="stDecoration"] { display: none !important; }
+
     /* ---------- Brand bar ---------- */
     .brand-bar {
         display: flex; align-items: center; justify-content: space-between;
@@ -331,6 +337,133 @@ components.html(
     if (btns.length < 2) return;
     (dx < 0 ? btns[1] : btns[0]).click();
   }, {passive: true});
+})();
+</script>
+""",
+    height=0,
+)
+
+# =====================================================================
+# Hide platform badge (JS fallback) + PWA install button (bottom right)
+# Needs: .streamlit/config.toml -> server.enableStaticServing = true
+#        static/manifest.json, static/sw.js, static/icon-192.png, static/icon-512.png
+# =====================================================================
+components.html(
+    """
+<script>
+(function () {
+  let host;
+  try { void window.top.document.body; host = window.top; } catch (e) { host = window.parent; }
+  if (host.__appShellInit) return;
+  host.__appShellInit = true;
+
+  const docs = [];
+  [host, window.parent].forEach(w => {
+    try { if (w.document && docs.indexOf(w.document) === -1) docs.push(w.document); } catch (e) {}
+  });
+  const hdoc = host.document;
+
+  /* ---------- 1. Hide Streamlit Cloud badge / Manage app button ---------- */
+  const HIDE = [
+    '[class*="viewerBadge"]', '[class*="_profileContainer_"]', '[class*="_terminalButton_"]',
+    '[class*="_container_gzau3"]', '[data-testid="manage-app-button"]',
+    '[data-testid="stAppDeployButton"]', '.stAppDeployButton'
+  ];
+  docs.forEach(d => {
+    try {
+      if (d.getElementById('hide-platform-badges')) return;
+      const st = d.createElement('style');
+      st.id = 'hide-platform-badges';
+      st.textContent = HIDE.join(',') + '{display:none !important;}';
+      d.head.appendChild(st);
+    } catch (e) {}
+  });
+  function hideBadges() {
+    docs.forEach(d => HIDE.forEach(s => {
+      try { d.querySelectorAll(s).forEach(n => n.style.setProperty('display', 'none', 'important')); } catch (e) {}
+    }));
+  }
+  hideBadges();
+  docs.forEach(d => {
+    try { new MutationObserver(hideBadges).observe(d.body, {childList: true, subtree: true}); } catch (e) {}
+  });
+
+  /* ---------- 2. PWA: manifest, theme, service worker ---------- */
+  const BASE = host.location.origin + '/app/static/';
+  try {
+    hdoc.querySelectorAll('link[rel="manifest"]').forEach(n => n.remove());
+    const add = (tag, attrs) => {
+      const el = hdoc.createElement(tag);
+      Object.keys(attrs).forEach(k => el.setAttribute(k, attrs[k]));
+      hdoc.head.appendChild(el);
+    };
+    add('link', {rel: 'manifest', href: BASE + 'manifest.json'});
+    add('link', {rel: 'apple-touch-icon', href: BASE + 'icon-192.png'});
+    add('meta', {name: 'theme-color', content: '#0b2545'});
+    add('meta', {name: 'apple-mobile-web-app-capable', content: 'yes'});
+    add('meta', {name: 'mobile-web-app-capable', content: 'yes'});
+    add('meta', {name: 'apple-mobile-web-app-title', content: 'Loan Calc'});
+  } catch (e) {}
+  try {
+    if ('serviceWorker' in host.navigator) {
+      host.navigator.serviceWorker.register(BASE + 'sw.js', {scope: '/app/static/'}).catch(() => {});
+    }
+  } catch (e) {}
+
+  /* ---------- 3. Install button, bottom right ---------- */
+  const standalone = host.matchMedia('(display-mode: standalone)').matches || host.navigator.standalone === true;
+  if (standalone) return;
+
+  const btn = hdoc.createElement('button');
+  btn.id = 'pwa-install-btn';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Install app');
+  btn.innerHTML =
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f5b301" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg><span>Install app</span>';
+  Object.assign(btn.style, {
+    position: 'fixed', right: '16px', bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+    zIndex: '2147483000', display: 'none', alignItems: 'center', gap: '8px',
+    padding: '11px 16px', border: 'none', borderRadius: '999px',
+    background: '#0b2545', color: '#ffffff',
+    font: '600 14px Poppins, system-ui, sans-serif',
+    boxShadow: '0 8px 20px rgba(11, 37, 69, 0.28)', cursor: 'pointer'
+  });
+  hdoc.body.appendChild(btn);
+
+  function showTip(text) {
+    const tip = hdoc.createElement('div');
+    tip.textContent = text;
+    Object.assign(tip.style, {
+      position: 'fixed', right: '16px', bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+      zIndex: '2147483000', maxWidth: '260px', padding: '10px 14px', borderRadius: '12px',
+      background: '#ffffff', color: '#0b2545', border: '1px solid #e3e8ef',
+      font: '500 13px Poppins, system-ui, sans-serif', boxShadow: '0 8px 20px rgba(11, 37, 69, 0.18)'
+    });
+    hdoc.body.appendChild(tip);
+    setTimeout(() => tip.remove(), 6000);
+  }
+
+  let deferred = null;
+  host.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferred = e;
+    btn.style.display = 'inline-flex';
+  });
+  host.addEventListener('appinstalled', () => { btn.style.display = 'none'; deferred = null; });
+
+  const isIOS = /iphone|ipad|ipod/i.test(host.navigator.userAgent);
+  if (isIOS) btn.style.display = 'inline-flex';
+
+  btn.addEventListener('click', async () => {
+    if (deferred) {
+      deferred.prompt();
+      try { await deferred.userChoice; } catch (e) {}
+      deferred = null;
+      btn.style.display = 'none';
+    } else if (isIOS) {
+      showTip('Tap the Share icon, then choose "Add to Home Screen".');
+    }
+  });
 })();
 </script>
 """,
