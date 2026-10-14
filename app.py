@@ -345,8 +345,8 @@ components.html(
 
 # =====================================================================
 # Hide platform badge (JS fallback) + PWA install button (bottom right)
-# Needs: .streamlit/config.toml -> server.enableStaticServing = true
-#        static/manifest.json, static/sw.js, static/icon-192.png, static/icon-512.png
+# The manifest and icons are generated in the browser, so no static files
+# (and no extra network requests) are needed.
 # =====================================================================
 components.html(
     """
@@ -388,29 +388,83 @@ components.html(
     try { new MutationObserver(hideBadges).observe(d.body, {childList: true, subtree: true}); } catch (e) {}
   });
 
-  /* ---------- 2. PWA: manifest, theme, service worker ---------- */
-  const BASE = host.location.origin + '/app/static/';
+  /* ---------- 2. Manifest + icons, built in the browser ---------- */
+  function rr(g, x, y, w, h, r) {
+    g.beginPath(); g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  function drawIcon(size) {
+    const c = hdoc.createElement('canvas');
+    c.width = size; c.height = size;
+    const g = c.getContext('2d');
+    const k = size / 512;
+    const amber = '#f5b301';
+    g.fillStyle = '#0b2545'; g.fillRect(0, 0, size, size);
+    rr(g, 136 * k, 96 * k, 240 * k, 320 * k, 36 * k);
+    g.fillStyle = '#13315c'; g.fill();
+    g.lineWidth = 14 * k; g.strokeStyle = amber; g.stroke();
+    rr(g, 176 * k, 140 * k, 160 * k, 56 * k, 12 * k);
+    g.fillStyle = amber; g.fill();
+    [246, 306, 366].forEach((y, r) => [196, 256, 316].forEach((x, cI) => {
+      g.beginPath(); g.arc(x * k, y * k, 15 * k, 0, Math.PI * 2);
+      g.fillStyle = (r === 2 && cI === 2) ? amber : '#ffffff'; g.fill();
+    }));
+    return c.toDataURL('image/png');
+  }
+
   try {
+    const origin = host.location.origin;
+    const icon192 = drawIcon(192), icon512 = drawIcon(512);
+    const manifest = {
+      id: origin + '/',
+      name: 'Loan Calculator',
+      short_name: 'Loan Calc',
+      description: 'A clearer view of your loan repayment.',
+      start_url: origin + host.location.pathname,
+      scope: origin + '/',
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#f5f7fb',
+      theme_color: '#0b2545',
+      icons: [
+        {src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any'},
+        {src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any'},
+        {src: icon512, sizes: '512x512', type: 'image/png', purpose: 'maskable'}
+      ]
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'}));
     hdoc.querySelectorAll('link[rel="manifest"]').forEach(n => n.remove());
     const add = (tag, attrs) => {
       const el = hdoc.createElement(tag);
       Object.keys(attrs).forEach(k => el.setAttribute(k, attrs[k]));
       hdoc.head.appendChild(el);
     };
-    add('link', {rel: 'manifest', href: BASE + 'manifest.json'});
-    add('link', {rel: 'apple-touch-icon', href: BASE + 'icon-192.png'});
+    add('link', {rel: 'manifest', href: url});
+    add('link', {rel: 'apple-touch-icon', href: icon192});
     add('meta', {name: 'theme-color', content: '#0b2545'});
     add('meta', {name: 'apple-mobile-web-app-capable', content: 'yes'});
     add('meta', {name: 'mobile-web-app-capable', content: 'yes'});
     add('meta', {name: 'apple-mobile-web-app-title', content: 'Loan Calc'});
   } catch (e) {}
-  try {
-    if ('serviceWorker' in host.navigator) {
-      host.navigator.serviceWorker.register(BASE + 'sw.js', {scope: '/app/static/'}).catch(() => {});
-    }
-  } catch (e) {}
 
-  /* ---------- 3. Install button, bottom right ---------- */
+  /* ---------- 3. Offline notice ---------- */
+  const note = hdoc.createElement('div');
+  note.id = 'pwa-offline-note';
+  note.textContent = 'You are offline. Calculations need an internet connection.';
+  Object.assign(note.style, {
+    position: 'fixed', top: '12px', left: '50%', transform: 'translateX(-50%)',
+    zIndex: '2147483000', display: 'none', maxWidth: '90vw', textAlign: 'center',
+    padding: '9px 16px', borderRadius: '999px', background: '#0b2545', color: '#fff',
+    font: '500 13px Poppins, system-ui, sans-serif', boxShadow: '0 8px 20px rgba(11, 37, 69, 0.25)'
+  });
+  hdoc.body.appendChild(note);
+  const syncOnline = () => { note.style.display = host.navigator.onLine ? 'none' : 'block'; };
+  host.addEventListener('online', syncOnline);
+  host.addEventListener('offline', syncOnline);
+  syncOnline();
+
+  /* ---------- 4. Install button, bottom right (always visible in a browser tab) ---------- */
   const standalone = host.matchMedia('(display-mode: standalone)').matches || host.navigator.standalone === true;
   if (standalone) return;
 
@@ -422,7 +476,7 @@ components.html(
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f5b301" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg><span>Install app</span>';
   Object.assign(btn.style, {
     position: 'fixed', right: '16px', bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
-    zIndex: '2147483000', display: 'none', alignItems: 'center', gap: '8px',
+    zIndex: '2147483000', display: 'inline-flex', alignItems: 'center', gap: '8px',
     padding: '11px 16px', border: 'none', borderRadius: '999px',
     background: '#0b2545', color: '#ffffff',
     font: '600 14px Poppins, system-ui, sans-serif',
@@ -440,28 +494,23 @@ components.html(
       font: '500 13px Poppins, system-ui, sans-serif', boxShadow: '0 8px 20px rgba(11, 37, 69, 0.18)'
     });
     hdoc.body.appendChild(tip);
-    setTimeout(() => tip.remove(), 6000);
+    setTimeout(() => tip.remove(), 7000);
   }
 
   let deferred = null;
-  host.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault();
-    deferred = e;
-    btn.style.display = 'inline-flex';
-  });
+  host.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; });
   host.addEventListener('appinstalled', () => { btn.style.display = 'none'; deferred = null; });
 
   const isIOS = /iphone|ipad|ipod/i.test(host.navigator.userAgent);
-  if (isIOS) btn.style.display = 'inline-flex';
-
   btn.addEventListener('click', async () => {
     if (deferred) {
       deferred.prompt();
       try { await deferred.userChoice; } catch (e) {}
       deferred = null;
-      btn.style.display = 'none';
     } else if (isIOS) {
       showTip('Tap the Share icon, then choose "Add to Home Screen".');
+    } else {
+      showTip('Open your browser menu and choose "Install app" or "Add to Home screen".');
     }
   });
 })();

@@ -1,7 +1,3 @@
-[server]
-# Serves ./static at /app/static (needed for the PWA manifest, icons, service worker)
-enableStaticServing = true
-
 [client]
 # Hides the Deploy button and main menu for regular visitors
 toolbarMode = "viewer"
