@@ -555,7 +555,7 @@ if st.session_state.active_page == LOAN_TAB:
             c_start, c_end = st.columns(2)
             with c_start:
                 start_date = st.date_input(
-                    "Start date", value=None, min_value=date(2000, 1, 1),
+                    "Disbursement date", value=None, min_value=date(2000, 1, 1),
                     max_value=date(2100, 1, 1), key="l_start",
                 )
             with c_end:
@@ -565,7 +565,7 @@ if st.session_state.active_page == LOAN_TAB:
                         max_value=start_date + timedelta(days=30), key="l_end",
                     )
                 else:
-                    end_date = st.date_input("End date", value=None, disabled=True, key="l_end")
+                    end_date = st.date_input("Repayment Date", value=None, disabled=True, key="l_end")
 
             if start_date and end_date:
                 days = (end_date - start_date).days
