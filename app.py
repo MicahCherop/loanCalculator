@@ -533,12 +533,12 @@ if st.session_state.active_page == LOAN_TAB:
             section_head("01", "Loan details")
 
             principal = st.number_input(
-                "Loan amount (KSh)", min_value=5000.0, value=None, step=500.0,
+                "Loan amount (KSh)", min_value=5000.0, value=None, step=100.0,
                 format="%.2f", placeholder="e.g. 5000.00", key="l_prin",
             )
             st.caption("Minimum loan amount: KSh 5,000")
 
-            add_reg_fee = st.checkbox("Add KSh 500 registration fee", key="l_reg")
+            add_reg_fee = st.checkbox("Add KSh 500 registration fee(for new Customers only)", key="l_reg")
 
             loyalty_band = st.selectbox(
                 "Loyalty band", options=list(LOYALTY_RATES.keys()), index=None,
@@ -671,7 +671,7 @@ elif st.session_state.active_page == DEFAULT_TAB:
 
             disbursed = st.number_input(
                 "Disbursement amount defaulted (KSh)", min_value=5000.0, value=None,
-                step=500.0, placeholder="e.g. 10000.00", key="d_amt",
+                step=100.0, placeholder="e.g. 10000.00", key="d_amt",
             )
             st.caption("Original disbursement amount · Minimum KSh 5,000")
 
