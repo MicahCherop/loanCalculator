@@ -613,6 +613,14 @@ if st.session_state.active_page == LOAN_TAB:
                     res["expected_payment_30_days"] += reg_fee
                     res["remaining_payment_30_days"] = max(Decimal("0"), res["expected_payment_30_days"] - pp_val)
 
+                    # Suggested installments spread the full loan cost, including
+                    # interest and any registration fee, across the selected term.
+                    daily_payment = (
+                        (res["total_before_payment"] / Decimal(res["actual_days"])).quantize(Decimal("0.01"))
+                        if res["actual_days"] > 0 else None
+                    )
+                    weekly_payment = (daily_payment * Decimal("7")).quantize(Decimal("0.01")) if daily_payment is not None else None
+
                     daily_int = res["principal"] * res["daily_rate"]
                     tenure_pct = min(100, max(0, int(res["actual_days"]) / 30 * 100))
 
@@ -641,6 +649,12 @@ if st.session_state.active_page == LOAN_TAB:
                                 <div class="title">Expected payment in 30 days</div>
                                 <div class="hint">Principal + 30 days of interest, before partial payments</div>
                                 {row("After partial payment", f"KSh {res['remaining_payment_30_days']:,.2f}")}
+                            </div>
+                            <div class="sub-card">
+                                <div class="title">Suggested payment schedule</div>
+                                <div class="hint">Total principal, interest{', and registration fee' if reg_fee > 0 else ''} spread across {res['actual_days']} days</div>
+                                {row("Daily payment", f"KSh {daily_payment:,.2f}" if daily_payment is not None else "Not available for a 0-day term")}
+                                {row("Weekly payment (7 days)", f"KSh {weekly_payment:,.2f}" if weekly_payment is not None else "Not available")}
                             </div>
                         </div>
                         """,
